@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 
 	"github.com/itchyny/gojq"
 	"github.com/wader/jq-lsp/gojqparser"
@@ -129,6 +130,7 @@ func (i *interp) Eval(src string, c interface{}) (gojq.Iter, error) {
 		},
 	}))
 
+	compilerOpts = append(compilerOpts, gojq.WithFunction("file_exists", 0, 0, i.fileExists))
 	compilerOpts = append(compilerOpts, gojq.WithFunction("readfile", 0, 0, i.readFile))
 	compilerOpts = append(compilerOpts, gojq.WithFunction("stdin", 0, 1, i.stdin))
 	compilerOpts = append(compilerOpts, gojq.WithIterFunction("stdout", 0, 0, i.stdout))
@@ -142,6 +144,19 @@ func (i *interp) Eval(src string, c interface{}) (gojq.Iter, error) {
 	}
 
 	return gc.RunWithContext(context.Background(), c), nil
+}
+
+func (i *interp) fileExists(c interface{}, a []interface{}) interface{} {
+	path, err := toString(c)
+	if err != nil {
+		return err
+	}
+
+	info, err := os.Stat(path)
+	if os.IsNotExist(err) {
+		return false
+	}
+	return !info.IsDir()
 }
 
 func (i *interp) readFile(c interface{}, a []interface{}) interface{} {

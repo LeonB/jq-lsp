@@ -39,6 +39,11 @@ def readline:
   | rtrimstr("\r")
   );
 
+
+def join_paths($paths):
+    $paths | join("/")
+;
+
 def jsonrpc_read:
   def _header:
     [ repeat_break(
@@ -148,9 +153,15 @@ def query_args:
 
 # file:///a/b/c rel "d" -> file:///a/b/d
 def uri_resolve($rel):
-  ( [.[0:rindex("/")+1], $rel]
-  | join("")
-  );
+  if $rel[0] == "/" then
+    # absolute, just return it
+    "file://" + $rel
+  else
+    ( [.[0:rindex("/")+1], $rel]
+    | join("")
+    )
+  end
+;
 
 def file_uri_to_local: ltrimstr("file://");
 
@@ -283,15 +294,27 @@ def query_walk($uri; $start_env; f):
       );
     def _func_def_env($uri): _func_def_env($uri; null);
 
-    def _import_env:
+    def _import_env($search_paths):
       # TODO: import failure
       # TODO: transitive include, max depth
       ( . #debug({import: .})
       | (.import_path.str) as $path
       | .import_alias as $import_alias
-      | ($uri | uri_resolve($path)) + ".jq"
+      | $search_paths | map(
+          (join_paths([., $path]) + ".jq") as $path
+          | ($uri | uri_resolve($path)) as $include_uri
+          | ($include_uri | file_uri_to_local) as $local
+          | $local
+      ) as $paths
+      # select only existing paths
+      | ($paths | map(select(
+        try(
+          file_exists
+        )
+        catch empty
+      ))) as $paths
+      | $paths | first # use first path match for reading
       | . as $include_uri
-      | file_uri_to_local
       | try
           ( readfile
           | query_fromstring
@@ -416,10 +439,12 @@ def query_walk($uri; $start_env; f):
 
     ( # inject #include ".jq.lsp" to allow adding additional builtins
       ( [{import_path: {str: ".jq-lsp"}}]
-      | map(_import_env)
+      | map(_import_env(["."]))
       ) as $dotjqlsp_envs
     | ( (.imports // [])
-      | map(_import_env)
+      # import includes from document
+      # @TODO: add $state.settings.search_paths
+      | map(_import_env([".", "/Users/leon/Workspaces/go/src/github.com/LeonB/jq-lsp"]))
       ) as $imports_envs
     | ( (.func_defs // [])
       | map(_func_def_env($uri))
@@ -572,6 +597,10 @@ def handle($state):
             }
           }
         ]}
+      elif $method == "workspace/didChangeConfiguration" then
+        {
+            state: ($state + {settings: $params.settings.jqls})
+        }
       # TODO: exit
       elif $method == "shutdown" then null_result
       elif (

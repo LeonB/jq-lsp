@@ -40,6 +40,16 @@
         "uri": "file://\(env.URI)/tests/b.jq"
       }
     }
+  },
+  {
+    "id": 4,
+    "jsonrpc": "2.0",
+    "method": "workspace/didChangeConfiguration",
+    "params": {
+      "settings": {
+        "jqls": {"search_path": ["."]}
+      }
+    }
   }
 
 ][]
