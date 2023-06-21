@@ -287,7 +287,7 @@ def query_walk($uri; $start_env; f):
       # TODO: import failure
       # TODO: transitive include, max depth
       ( . #debug({import: .})
-      | (.include_path.str // .import_path.str) as $path
+      | (.import_path.str) as $path
       | .import_alias as $import_alias
       | ($uri | uri_resolve($path)) + ".jq"
       | . as $include_uri
@@ -415,7 +415,7 @@ def query_walk($uri; $start_env; f):
       );
 
     ( # inject #include ".jq.lsp" to allow adding additional builtins
-      ( [{include_path: {str: ".jq-lsp"}}]
+      ( [{import_path: {str: ".jq-lsp"}}]
       | map(_import_env)
       ) as $dotjqlsp_envs
     | ( (.imports // [])
